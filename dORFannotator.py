@@ -682,6 +682,171 @@ def detect_chr_prefix(genome_file: str) -> bool:
         return True  # Default to chr prefix
 
 
+def detect_vcf_chr_format(vcf_file: str) -> bool:
+    """
+    Detect if VCF file uses 'chr' prefix in chromosome names.
+    
+    Args:
+        vcf_file: Path to VCF file
+        
+    Returns:
+        True if VCF uses 'chr' prefix, False otherwise
+    """
+    try:
+        vcf = VCF(vcf_file)
+        # Get chromosome names from VCF header
+        chromosomes = vcf.seqnames
+        vcf.close()
+        
+        if not chromosomes:
+            logger.warning("Could not detect chromosome format from VCF - no chromosomes found")
+            return True  # Default to chr prefix
+        
+        # Check first few chromosomes
+        for chrom in chromosomes[:10]:
+            # Skip special chromosomes
+            if chrom.startswith('GL') or chrom.startswith('KI') or '_' in chrom:
+                continue
+            # Check if it starts with 'chr'
+            if chrom.startswith('chr'):
+                return True
+            # If we find a numeric or X/Y chromosome without 'chr', return False
+            if chrom in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 
+                         '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
+                         '21', '22', 'X', 'Y', 'MT', 'M']:
+                return False
+        
+        # If no clear indication, default to chr prefix
+        return True
+    except Exception as e:
+        logger.warning(f"Could not detect VCF chr format: {e}")
+        return True  # Default to chr prefix
+
+
+def detect_file_chr_format(file_path: str, file_type: str = 'gtf') -> bool:
+    """
+    Detect if GTF/GFF/BED file uses 'chr' prefix in chromosome names.
+    
+    Args:
+        file_path: Path to file
+        file_type: Type of file ('gtf', 'gff', 'bed')
+        
+    Returns:
+        True if file uses 'chr' prefix, False otherwise
+    """
+    try:
+        open_func = gzip.open if file_path.endswith('.gz') else open
+        mode = 'rt' if file_path.endswith('.gz') else 'r'
+        
+        chr_count = 0
+        no_chr_count = 0
+        lines_checked = 0
+        max_lines = 100  # Check first 100 data lines
+        
+        with open_func(file_path, mode) as f:
+            for line in f:
+                # Skip comments
+                if line.startswith('#'):
+                    continue
+                
+                # Parse chromosome (first column)
+                fields = line.strip().split('\t')
+                if len(fields) < 3:
+                    continue
+                
+                chrom = fields[0]
+                
+                # Skip header lines
+                if chrom.lower() in ['chr', 'chrom', 'chromosome']:
+                    continue
+                
+                # Skip special chromosomes
+                if chrom.startswith('GL') or chrom.startswith('KI') or '_' in chrom:
+                    continue
+                
+                # Count chr vs no-chr
+                if chrom.startswith('chr'):
+                    chr_count += 1
+                elif chrom in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+                              '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
+                              '21', '22', 'X', 'Y', 'MT', 'M'] or chrom.startswith(tuple('123456789')):
+                    no_chr_count += 1
+                
+                lines_checked += 1
+                if lines_checked >= max_lines:
+                    break
+        
+        # Decide based on majority
+        if chr_count > no_chr_count:
+            return True
+        elif no_chr_count > chr_count:
+            return False
+        else:
+            # Default to chr prefix if unclear
+            return True
+            
+    except Exception as e:
+        logger.warning(f"Could not detect chr format from {file_type} file: {e}")
+        return True  # Default to chr prefix
+
+
+def standardize_chromosome_name(chrom: str, target_format: bool) -> str:
+    """
+    Standardize chromosome name to target format.
+    
+    This is the main function for chromosome name conversion throughout the pipeline.
+    
+    Args:
+        chrom: Input chromosome name
+        target_format: True if target uses 'chr' prefix, False otherwise
+        
+    Returns:
+        Standardized chromosome name
+    """
+    return normalize_chromosome(chrom, target_format)
+
+
+def check_chromosome_format_consistency(fasta_file: str, vcf_file: str, 
+                                       gtf_file: str, bed_file: str) -> Dict[str, bool]:
+    """
+    Check chromosome format consistency across all input files.
+    
+    Args:
+        fasta_file: Path to FASTA file
+        vcf_file: Path to VCF file
+        gtf_file: Path to GTF file
+        bed_file: Path to BED file
+        
+    Returns:
+        Dictionary mapping file type to whether it uses 'chr' prefix
+    """
+    logger.info("Checking chromosome naming format across all input files...")
+    
+    formats = {}
+    
+    # Check each file
+    formats['fasta'] = detect_chr_prefix(fasta_file)
+    formats['vcf'] = detect_vcf_chr_format(vcf_file)
+    formats['gtf'] = detect_file_chr_format(gtf_file, 'gtf')
+    formats['bed'] = detect_file_chr_format(bed_file, 'bed')
+    
+    # Report formats
+    logger.info("  Detected chromosome formats:")
+    for file_type, has_chr in formats.items():
+        prefix_str = "WITH 'chr' prefix" if has_chr else "WITHOUT 'chr' prefix"
+        logger.info(f"    {file_type.upper():6s}: {prefix_str}")
+    
+    # Check for inconsistencies
+    unique_formats = set(formats.values())
+    if len(unique_formats) > 1:
+        logger.warning("  ⚠ INCONSISTENT chromosome naming detected!")
+        logger.warning("  The program will automatically standardize all files to match FASTA format.")
+    else:
+        logger.info("  ✓ All files use consistent chromosome naming format.")
+    
+    return formats
+
+
 # =============================================================================
 # GTF/GFF Parsing
 # =============================================================================
@@ -733,7 +898,8 @@ def parse_gtf_attributes_fast(attr_str: str) -> Tuple[str, str]:
 
 def parse_gtf_file(gtf_file: str, 
                    chr_filter: Optional[Set[str]] = None,
-                   region_filter: Optional[GenomicRegion] = None) -> Dict[str, TranscriptInfo]:
+                   region_filter: Optional[GenomicRegion] = None,
+                   target_chr_format: Optional[bool] = None) -> Dict[str, TranscriptInfo]:
     """
     Parse GTF/GFF file to extract transcript structures.
     
@@ -742,14 +908,26 @@ def parse_gtf_file(gtf_file: str,
     - Fast attribute parsing
     - Progress reporting for large files
     - Optional chromosome/region filtering
+    - Chromosome name standardization to match FASTA format
     
     Args:
         gtf_file: Path to GTF/GFF file
         chr_filter: Set of chromosomes to include (None = all)
         region_filter: Genomic region to filter (None = all)
+        target_chr_format: Target chromosome format (True=chr prefix, False=no prefix, None=auto-detect)
     """
     transcripts: Dict[str, TranscriptInfo] = {}
     gene_names: Dict[str, str] = {}
+    
+    # Detect GTF chromosome format if target not specified
+    if target_chr_format is not None:
+        gtf_has_chr = detect_file_chr_format(gtf_file, 'gtf')
+        needs_conversion = (gtf_has_chr != target_chr_format)
+        if needs_conversion:
+            logger.info(f"  GTF uses {'chr prefix' if gtf_has_chr else 'no chr prefix'}, "
+                       f"converting to {'chr prefix' if target_chr_format else 'no chr prefix'} to match FASTA")
+    else:
+        needs_conversion = False
     
     # Features we care about (including GFF3 variants)
     RELEVANT_FEATURES = {'transcript', 'mRNA', 'CDS', 'three_prime_UTR', 'five_prime_UTR'}
@@ -834,6 +1012,10 @@ def parse_gtf_file(gtf_file: str,
             end = int(fields[4])
             strand = fields[6]
             
+            # Standardize chromosome name to target format
+            if needs_conversion:
+                chrom = standardize_chromosome_name(chrom, target_chr_format)
+            
             # Apply chromosome filter
             if not chromosome_in_filter(chrom, chr_filter):
                 continue
@@ -898,16 +1080,32 @@ def parse_gtf_file(gtf_file: str,
 
 def parse_dorf_bed(bed_file: str, 
                    chr_filter: Optional[Set[str]] = None,
-                   region_filter: Optional[GenomicRegion] = None) -> Dict[str, List[dORFEntry]]:
+                   region_filter: Optional[GenomicRegion] = None,
+                   target_chr_format: Optional[bool] = None) -> Dict[str, List[dORFEntry]]:
     """Parse known dORF BED file.
     
     Format: chr start end strand transcript_id [dorf_id]
-
+    
+    Args:
+        bed_file: Path to BED file
+        chr_filter: Set of chromosomes to include (None = all)
+        region_filter: Genomic region to filter (None = all)
+        target_chr_format: Target chromosome format (True=chr prefix, False=no prefix, None=auto-detect)
     """
     dORFs: Dict[str, List[dORFEntry]] = defaultdict(list)
     
     filter_msg = " (with chromosome/region filter)" if (chr_filter or region_filter) else ""
     logger.info(f"Parsing dORF BED file: {bed_file}{filter_msg}")
+    
+    # Detect BED chromosome format if target specified
+    if target_chr_format is not None:
+        bed_has_chr = detect_file_chr_format(bed_file, 'bed')
+        needs_conversion = (bed_has_chr != target_chr_format)
+        if needs_conversion:
+            logger.info(f"  BED uses {'chr prefix' if bed_has_chr else 'no chr prefix'}, "
+                       f"converting to {'chr prefix' if target_chr_format else 'no chr prefix'} to match FASTA")
+    else:
+        needs_conversion = False
     
     skipped_by_filter = 0
     
@@ -930,6 +1128,10 @@ def parse_dorf_bed(bed_file: str,
             # BED (start, end] -> 1-based [start+1, end]
             start_1based = bed_start + 1
             end_1based = bed_end
+            
+            # Standardize chromosome name to target format
+            if needs_conversion:
+                chrom = standardize_chromosome_name(chrom, target_chr_format)
             
             # Apply chromosome filter
             if not chromosome_in_filter(chrom, chr_filter):
@@ -1203,6 +1405,68 @@ def detect_csq_format(vcf_header: str) -> Optional[str]:
                     return part.strip()
     
     return None
+
+
+def detect_vcf_annotation_type(vcf_header: str, first_variant=None) -> str:
+    """
+    Detect what type of annotation the VCF file has.
+    
+    Checks for:
+    1. Custom VEP fields (VEP_Feature, VEP_SYMBOL, VEP_Consequence)
+    2. Standard VEP CSQ field
+    3. ANNOVAR annotation fields
+    
+    Args:
+        vcf_header: VCF header string
+        first_variant: Optional first variant to check INFO fields
+    
+    Returns:
+        'custom_vep', 'standard_vep', 'annovar', or 'none'
+    """
+    import re
+    
+    # Check for custom VEP fields in header
+    if re.search(r'##INFO=<ID=VEP_Feature', vcf_header):
+        return 'custom_vep'
+    if re.search(r'##INFO=<ID=VEP_SYMBOL', vcf_header):
+        return 'custom_vep'
+    if re.search(r'##INFO=<ID=VEP_Consequence', vcf_header):
+        return 'custom_vep'
+    
+    # Check for standard VEP CSQ field
+    if re.search(r'##INFO=<ID=CSQ', vcf_header):
+        return 'standard_vep'
+    
+    # Check for ANNOVAR fields
+    annovar_patterns = [
+        r'##INFO=<ID=Gene\.refGene',
+        r'##INFO=<ID=Gene\.ensGene',
+        r'##INFO=<ID=Func\.refGene',
+        r'##INFO=<ID=Func\.ensGene',
+        r'##INFO=<ID=AAChange\.refGene',
+        r'##INFO=<ID=AAChange\.ensGene',
+    ]
+    for pattern in annovar_patterns:
+        if re.search(pattern, vcf_header):
+            return 'annovar'
+    
+    # Additional check: if first_variant provided, check INFO fields
+    if first_variant:
+        info_keys = list(first_variant.INFO.keys()) if hasattr(first_variant, 'INFO') else []
+        
+        # Check for custom VEP in INFO
+        if any(k.startswith('VEP_') for k in info_keys):
+            return 'custom_vep'
+        
+        # Check for CSQ in INFO
+        if 'CSQ' in info_keys:
+            return 'standard_vep'
+        
+        # Check for ANNOVAR in INFO
+        if any(k.endswith('.refGene') or k.endswith('.ensGene') for k in info_keys):
+            return 'annovar'
+    
+    return 'none'
 
 
 # =============================================================================
@@ -2337,16 +2601,17 @@ def _process_region_batch(args: Tuple) -> List[List]:
     
     Args:
         args: Tuple of (batch_id, region_list, vcf_file, fasta_path, transcripts_dict, 
-                        dorfs_dict, csq_format, utr_lookup)
+                        dorfs_dict, csq_format, annotation_type, vcf_has_chr, utr_lookup)
               where region_list is [(chrom, start, end, utr_regions_for_region), ...]
     
     Returns:
         List of result rows (each row is a list for DataFrame)
     """
     (batch_id, region_list, vcf_file, fasta_path, transcripts, 
-     dorfs, csq_format, utr_lookup) = args
+     dorfs, csq_format, annotation_type, vcf_has_chr, utr_lookup) = args
     
     results = []
+    has_annotation = (annotation_type != 'none')
     
     try:
         # Each process opens its own FASTA and VCF
@@ -2354,7 +2619,9 @@ def _process_region_batch(args: Tuple) -> List[List]:
         vcf = VCF(vcf_file)
         
         for chrom, region_start, region_end, utr_regions_for_region in region_list:
-            region_str = f"{chrom}:{region_start}-{region_end}"
+            # Convert chromosome name to VCF format for querying
+            vcf_chrom = normalize_chromosome(chrom, vcf_has_chr)
+            region_str = f"{vcf_chrom}:{region_start}-{region_end}"
             try:
                 for variant in vcf(region_str):
                     if variant.var_type not in ('snp', 'indel', 'mnp'):
@@ -2368,12 +2635,17 @@ def _process_region_batch(args: Tuple) -> List[List]:
                             continue
                         alt = str(alt)
                         
-                        # Extract annotation
-                        symbol, transcript_ids = extract_annotation_from_variant(
-                            variant, transcripts, csq_format
-                        )
+                        symbol = ""
+                        transcript_ids = []
                         
-                        # If no annotation, check UTR overlap
+                        # Only try to extract annotation if VCF has annotation fields
+                        if has_annotation:
+                            # Extract annotation
+                            symbol, transcript_ids = extract_annotation_from_variant(
+                                variant, transcripts, csq_format
+                            )
+                        
+                        # If no annotation found (or no annotation in VCF), check UTR overlap
                         if not transcript_ids:
                             for utr_start, utr_end, tid in utr_regions_for_region:
                                 if utr_start <= pos <= utr_end:
@@ -2513,8 +2785,25 @@ def process_vcf_file(vcf_file: str, transcripts: Dict[str, TranscriptInfo],
     # Detect CSQ format from VCF header for VEP parsing
     vcf_header = vcf.raw_header if hasattr(vcf, 'raw_header') else ""
     csq_format = detect_csq_format(vcf_header)
-    if csq_format:
-        logger.info(f"Detected VEP CSQ format: {csq_format[:50]}...")
+    
+    # Detect annotation type
+    annotation_type = detect_vcf_annotation_type(vcf_header)
+    has_annotation = (annotation_type != 'none')
+    
+    # Detect VCF chromosome naming format
+    vcf_has_chr = detect_vcf_chr_format(vcf_file)
+    logger.info(f"VCF chromosome format: {'chr prefix' if vcf_has_chr else 'no chr prefix'}")
+    
+    # Log annotation detection results
+    if annotation_type == 'custom_vep':
+        logger.info("Detected custom VEP annotation fields in VCF")
+    elif annotation_type == 'standard_vep':
+        logger.info(f"Detected standard VEP CSQ annotation: {csq_format[:50] if csq_format else 'format unknown'}...")
+    elif annotation_type == 'annovar':
+        logger.info("Detected ANNOVAR annotation fields in VCF")
+    else:
+        logger.info("No VEP/ANNOVAR/custom annotation detected - using position-based annotation")
+        logger.info("Will annotate variants based on position, GTF, FASTA and dORF files directly")
     
     def process_single_variant(variant, chrom: str, pos: int, ref: str) -> None:
         """Process a single variant and append results to all_results."""
@@ -2526,11 +2815,15 @@ def process_vcf_file(vcf_file: str, transcripts: Dict[str, TranscriptInfo],
                 continue
             
             alt = str(alt)
+            symbol = ""
+            transcript_ids = []
             
-            # Extract annotation using unified function (supports custom VEP, standard VEP CSQ, ANNOVAR)
-            symbol, transcript_ids = extract_annotation_from_variant(variant, transcripts, csq_format)
+            # Only try to extract annotation if VCF has annotation fields
+            if has_annotation:
+                # Extract annotation using unified function (supports custom VEP, standard VEP CSQ, ANNOVAR)
+                symbol, transcript_ids = extract_annotation_from_variant(variant, transcripts, csq_format)
             
-            # If no annotation found, check UTR regions for this chromosome
+            # If no annotation found (or no annotation in VCF), check UTR regions for this chromosome
             if not transcript_ids:
                 # Use pre-built index for faster lookup
                 if chrom in utr_regions_by_chrom:
@@ -2603,6 +2896,8 @@ def process_vcf_file(vcf_file: str, transcripts: Dict[str, TranscriptInfo],
                     transcripts,
                     dorfs,
                     csq_format,
+                    annotation_type,
+                    vcf_has_chr,
                     utr_lookup
                 ))
             
@@ -2640,16 +2935,22 @@ def process_vcf_file(vcf_file: str, transcripts: Dict[str, TranscriptInfo],
             
             logger.debug(f"Querying {len(merged_regions)} merged 3'UTR regions on {chrom}")
             
+            # Convert chromosome name to VCF format for querying
+            vcf_chrom = normalize_chromosome(chrom, vcf_has_chr)
+            
             for region_start, region_end in merged_regions:
                 # cyvcf2 region query format: "chrom:start-end"
-                region_str = f"{chrom}:{region_start}-{region_end}"
+                # Use VCF's chromosome naming format
+                region_str = f"{vcf_chrom}:{region_start}-{region_end}"
                 try:
                     for variant in vcf(region_str):
                         # Skip non-SNV/indel
                         if variant.var_type not in ('snp', 'indel', 'mnp'):
                             continue
                         
-                        process_single_variant(variant, variant.CHROM, variant.POS, variant.REF)
+                        # Convert VCF chromosome name to FASTA format (our internal standard)
+                        variant_chrom = standardize_chromosome_name(variant.CHROM, config.chr_prefix)
+                        process_single_variant(variant, variant_chrom, variant.POS, variant.REF)
                 except Exception as e:
                     logger.warning(f"Region query failed for {region_str}: {e}")
                     continue
@@ -2664,7 +2965,8 @@ def process_vcf_file(vcf_file: str, transcripts: Dict[str, TranscriptInfo],
             if variant.var_type not in ('snp', 'indel', 'mnp'):
                 continue
             
-            chrom = variant.CHROM
+            # Convert VCF chromosome name to FASTA format (our internal standard)
+            chrom = standardize_chromosome_name(variant.CHROM, config.chr_prefix)
             pos = variant.POS
             ref = variant.REF
             
@@ -2810,18 +3112,27 @@ Homepage: https://github.com/liusihan/dORFannotator
     
     # Load input files
     try:
-        # Parse GTF
-        transcripts = parse_gtf_file(args.annotation, chr_filter, region_filter)
+        # Check chromosome format consistency across all files
+        chr_formats = check_chromosome_format_consistency(
+            args.genome, args.vcf, args.annotation, args.dorf
+        )
         
-        # Parse dORF BED
-        dorfs = parse_dorf_bed(args.dorf, chr_filter, region_filter)
+        # Use FASTA format as our internal standard
+        config.chr_prefix = chr_formats['fasta']
+        logger.info(f"\nUsing FASTA chromosome format as internal standard: "
+                   f"{'chr prefix' if config.chr_prefix else 'no chr prefix'}")
+        logger.info(f"All files will be standardized to this format during processing.\n")
+        
+        # Parse GTF with chromosome standardization
+        transcripts = parse_gtf_file(args.annotation, chr_filter, region_filter, 
+                                     target_chr_format=config.chr_prefix)
+        
+        # Parse dORF BED with chromosome standardization
+        dorfs = parse_dorf_bed(args.dorf, chr_filter, region_filter,
+                              target_chr_format=config.chr_prefix)
         
         # Open genome FASTA
         fasta = pysam.FastaFile(args.genome)
-        
-        # Detect chromosome prefix
-        config.chr_prefix = detect_chr_prefix(args.genome)
-        logger.info(f"Genome uses 'chr' prefix: {config.chr_prefix}")
         
         # Process VCF
         # Pass fasta_path for parallel processing support

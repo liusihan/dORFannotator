@@ -53,7 +53,7 @@ pip install dorfannotator
 ```
 
 ## Usage
-To run dORFannotator, you could the following command line:
+To run dORFannotator, you could use the following command line:
 ```bash
 python dORFannotator.py \
     --genome <reference.fa> \
