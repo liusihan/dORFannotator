@@ -3076,7 +3076,7 @@ Homepage: https://github.com/liusihan/dORFannotator
     print("\n" + "="*70)
     print(f"  dORFannotator v{__version__}")
     print("  Annotate 3'UTR variants affecting downstream ORFs")
-    print("  (C) 2024 Sihan Liu - West China Hospital")
+    print("  (C) 2025 Sihan Liu - West China Hospital")
     print("="*70 + "\n")
     
     start_time = time.time()
