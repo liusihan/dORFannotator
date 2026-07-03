@@ -48,6 +48,7 @@ pip install -e .
 # Test installation
 dORFannotator -h
 ```
+---
 
 ## Usage
 dORFannotator has two main subcommands:
@@ -130,6 +131,7 @@ dORFannotator annotate \
   --out tests/test.tsv \
   --include-predicted
 ```
+---
 
 ## Input and output formats
 
