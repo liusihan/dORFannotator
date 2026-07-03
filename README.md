@@ -102,7 +102,7 @@ dORFannotator annotate \
 | `--include-predicted` | Include all sequence-predicted ORF consequences. |
 | `--evidence-only` | Report only consequences affecting translated-evidence ORFs. |
 
-By default, `annotate` uses an evidence-first output mode: all consequences affecting translated-evidence ORFs are reported, while sequence-predicted ORFs are limited to strong-Kozak `dStart_gained`, strong-Kozak `dStop_gained`, and `dKozak_changed` events whose alternate Kozak strength is strong. Use `--include-predicted` to report all sequence-predicted ORF consequences.
+By default, `annotate` uses an evidence-first output mode: all consequences affecting translated-evidence dORFs are reported, while sequence-predicted dORFs are limited to strong-Kozak `dStart_gained`, strong-Kozak `dStop_gained`, and `dKozak_changed` events whose alternate Kozak strength is strong. Use `--include-predicted` to report all sequence-predicted consequences.
 
 ---
 
@@ -190,14 +190,14 @@ Column descriptions:
 | `mane` | Whether the transcript is a MANE transcript. |
 | `strand` | Transcript strand. |
 | `orf_class` | `dORF` or `doORF`. |
-| `csq` | dORFannotator consequence term. |
-| `evidence` | `true` if the affected dORF/doORF has evidence of translation; otherwise `false`. |
-| `dorf_count` | Number of interpreted dORFs for the annotated transcript. |
-| `dorf_start`, `dorf_end` | 1-based genomic coordinates of the interpreted ORF. |
-| `dist_cds` | Transcript-oriented distance from the annotated CDS stop to the interpreted ORF start. |
+| `csq` | Consequence. |
+| `evidence` | `true` if the affected reference dORF/doORF is supported by translation evidence; otherwise `false`. |
+| `dorf_count` | Number of translated dORFs for the annotated transcript. |
+| `dorf_start`, `dorf_end` | 1-based genomic coordinates of the interpreted dORF. |
+| `dist_cds` | Distance from the annotated CDS stop to the interpreted dORF start. |
 | `detail` | Consequence-specific semicolon-separated `key=value` fields. |
 
-dORFannotator reports the following primary consequence terms:
+dORFannotator reports the following consequence terms:
 
 | Consequence | Description |
 |---|---|
