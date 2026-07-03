@@ -7,9 +7,6 @@ Reference data and precomputed annotation-ready resources associated with the dO
 ---
 
 ## Table of Contents
-
-- [dORFannotator: functional annotation of variants affecting downstream open reading frames in 3′UTRs](#dorfannotator-functional-annotation-of-variants-affecting-downstream-open-reading-frames-in-3utrs)
-  - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
     - [Install from source](#install-from-source)
@@ -19,13 +16,10 @@ Reference data and precomputed annotation-ready resources associated with the dO
     - [Annotate VCF variants](#annotate-vcf-variants)
     - [Common options](#common-options)
   - [Examples](#examples)
-    - [ClinVar example test](#clinvar-example-test)
-    - [Use the precomputed database](#use-the-precomputed-database)
   - [Input and output formats](#input-and-output-formats)
     - [Variant input](#variant-input)
     - [Translated dORF evidence input](#translated-dorf-evidence-input)
     - [Annotation output](#annotation-output)
-    - [Consequence terms](#consequence-terms)
   - [Contributing](#contributing)
   - [License](#license)
   - [Contact](#contact)
@@ -93,19 +87,6 @@ dORFannotator annotate \
 
 ### Common options
 
-```bash
-dORFannotator annotate \
-  --vcf input.vcf.gz \
-  --db output.db \
-  --out annotated.dORFannotator.tsv \
-  --chr chr1,chr2,chrX \
-  --threads 8 \
-  --batch-size 10000 \
-  --mane-only
-```
-
-Selected options:
-
 | Option | Description |
 |---|---|
 | `--vcf` | Input VCF or VCF.GZ file. |
@@ -126,16 +107,12 @@ By default, `annotate` uses an evidence-first output mode: all consequences affe
 
 ## Examples
 
-### ClinVar example test
-
 This repository includes a ClinVar-derived input file and the expected dORFannotator output:
 
 ```text
 tests/clinvar_mane_3utr.filtered.tsv.gz
 tests/clinvar.dORFannotator.tsv
 ```
-
-### Use the precomputed database
 
 Download `gencode.v45.db.zip` from the Zenodo record (https://doi.org/10.5281/zenodo.21148673) and extract it:
 
@@ -212,15 +189,11 @@ Column descriptions:
 | `strand` | Transcript strand. |
 | `orf_class` | `dORF` or `doORF`. |
 | `csq` | dORFannotator consequence term. |
-| `evidence` | `true` if the affected reference ORF matches translated dORF evidence; otherwise `false`. |
+| `evidence` | `true` if the affected dORF/doORF has evidence of translation; otherwise `false`. |
 | `dorf_count` | Number of interpreted dORFs for the annotated transcript. |
 | `dorf_start`, `dorf_end` | 1-based genomic coordinates of the interpreted ORF. |
 | `dist_cds` | Transcript-oriented distance from the annotated CDS stop to the interpreted ORF start. |
 | `detail` | Consequence-specific semicolon-separated `key=value` fields. |
-
-The `evidence` field indicates support for the reference ORF only. It does not assert experimental support for a variant-created ORF.
-
-### Consequence terms
 
 dORFannotator reports the following primary consequence terms:
 
