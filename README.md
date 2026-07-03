@@ -1,174 +1,264 @@
-# dORFannotator
+﻿# dORFannotator: functional annotation of variants affecting downstream open reading frames in 3′UTRs
 
-**dORFannotator** is a high-performance bioinformatics tool for annotating 3' untranslated region (UTR) variants that affect downstream Open Reading Frames (dORFs). It identifies and classifies how genetic variants in the 3'UTR can create, destroy, or modify downstream ORFs, which may have functional consequences for gene regulation and protein expression.
+dORFannotator is a freely available tool for annotating SNVs, MNVs and small indels that create or alter downstream open reading frames (dORFs) and downstream overlapping open reading frames (doORFs) in 3′ untranslated regions (3′UTRs). 
 
-Currently, dORFannotator will annotate whether a small variation (1-5bp) including SNVs and indels in 3'UTR would have any of the following molecular consequences:
+Reference data and precomputed annotation-ready resources associated with the dORFannotator study are available from Zenodo: <https://doi.org/10.5281/zenodo.21148673>.
 
-- **dStart_gained**: Variant creates a new start codon in the 3'UTR (e.g. A→G mutation creates ATG from ATA)
+---
 
-- **dStop_gained**: Variant creates a new stop codon (e.g. G→T mutation creates TAA)
+## Table of Contents
 
--  **dStart_lost**: Variant distrup an existing start codon (e.g. ATG→ATC)
+- [dORFannotator: functional annotation of variants affecting downstream open reading frames in 3′UTRs](#dorfannotator-functional-annotation-of-variants-affecting-downstream-open-reading-frames-in-3utrs)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Install from source](#install-from-source)
+  - [Usage](#usage)
+    - [Build a reference database](#build-a-reference-database)
+    - [Annotate TSV variants](#annotate-tsv-variants)
+    - [Annotate VCF variants](#annotate-vcf-variants)
+    - [Common options](#common-options)
+  - [Examples](#examples)
+    - [ClinVar example test](#clinvar-example-test)
+    - [Use the precomputed database](#use-the-precomputed-database)
+  - [Input and output formats](#input-and-output-formats)
+    - [Variant input](#variant-input)
+    - [Translated dORF evidence input](#translated-dorf-evidence-input)
+    - [Annotation output](#annotation-output)
+    - [Consequence terms](#consequence-terms)
+  - [Contributing](#contributing)
+  - [License](#license)
+  - [Contact](#contact)
 
--  **dStop_lost**: Variant distrup an existing stop codon (e.g. TAA→CAA)
-
--  **dStart_change**: Start codon changes to another valid start codon (ATG→GTG)
-
--  **dStop_change**: Stop codon changes to another valid stop codon (TAA→TAG)
-
--  **dMissense**: Single nucleotide variant within a dORF result same amino acid change
-
--  **dIndel_frameshift**: Insertion/deletion causing frameshift in dORF
-
--  **dIndel_inframe**: Insertion/deletion maintaining reading frame
+---
 
 ## Installation
 
 ### Prerequisites
 
-dORFannotator requires Python 3.11+ and the following dependencies:
+- Python 3.10 or newer
+- `pip`
 
-- **pysam** >= 0.19.0
-- **cyvcf2** >= 0.30.0
-- **biopython** >= 1.79
-- **pandas** >= 1.3.0
-- **numpy** >= 1.20.0
-
-### Install
+### Install from source
 
 ```bash
-# Install Dependencies
-pip install pysam cyvcf2 biopython pandas numpy
-
 # Clone the repository
 git clone https://github.com/liusihan/dORFannotator.git
+
+# Navigate into the dORFannotator directory
 cd dORFannotator
-python setup 
 
-# install via pip
-pip install dorfannotator
+# Install locally via pip
+pip install -e .
 
-# The tool is a standalone Python script, no additional installation needed
-# Just ensure dependencies are installed
+# Test installation
+dORFannotator -h
 ```
 
 ## Usage
-To run dORFannotator, you could use the following command line:
+dORFannotator has two main subcommands:
+
 ```bash
-python dORFannotator.py \
-    --genome <reference.fa> \
-    --vcf <variants.vcf.gz> \
-    --dorf <known_dORFs.bed> \
-    --annotation <annotation.gtf> \
-    --out <output_prefix>
+dORFannotator build
+dORFannotator annotate
 ```
-To get a full list of options use
+
+### Build a reference database
+
 ```bash
-python dORFannotator.py -h
+dORFannotator build \
+  --gtf input.gtf.gz \
+  --fasta hg38.fa \
+  --translated-dorf translated_dORFs.tsv \
+  --out-db output.db
 ```
 
+### Annotate TSV variants
 
-### Required Arguments
-
-| Argument | Short | Description |
-|----------|-------|-------------|
-| `--genome` | `-g` | Reference genome FASTA file (must have `.fai` index) |
-| `--vcf` | `-v` | Input VCF file (must be bgzipped with `.tbi` index) |
-| `--dorf` | `-d` | Known dORF BED file |
-| `--annotation` | `-a` | Gene annotation GTF/GFF file |
-| `--out` | `-o` | Output file prefix |
-
-Format of known dORF file (BED):
-
-- Standard BED format
-- Minimum columns: `chrom`, `start`, `end`, `strand`, `transcript`
-- Optional 6th column: dORF identifier
-
-```
-chr1    990561  990719  +       ENST00000379370.2
-chr1    991234  991320  +       ENST00000379370.2
+```bash
+dORFannotator annotate \
+  --tsv input.tsv.gz \
+  --db output.db \
+  --out annotated.dORFannotator.tsv
 ```
 
-### Optional Arguments
+### Annotate VCF variants
 
+```bash
+dORFannotator annotate \
+  --vcf input.vcf.gz \
+  --db output.db \
+  --out annotated.dORFannotator.tsv
+```
 
-| Argument | Description | Example |
-|----------|-------------|---------|
-| `--chr` | Filter by chromosome(s) | `--chr chr1`, `--chr 1` or `--chr chr1,chr2,chrX` |
-| `--region` | Filter by genomic region | `--region chr1:1000000-2000000` |
-| `--threads` | Number of threads | 1 |
-| `--start-codons` | Comma-separated start codons | `ATG,CTG,GTG,TTG,ACG` |
-| `--stop-codons` | Comma-separated stop codons | `TAG,TAA,TGA` |
-| `--min-length` | Minimum ORF length (bp) | 30 |
-| `--max-length` | Maximum ORF length (bp) | 303 |
-| `--verbose` | Enable verbose logging | False |
-| `--version` | Show version and exit | - |
+### Common options
 
+```bash
+dORFannotator annotate \
+  --vcf input.vcf.gz \
+  --db output.db \
+  --out annotated.dORFannotator.tsv \
+  --chr chr1,chr2,chrX \
+  --threads 8 \
+  --batch-size 10000 \
+  --mane-only
+```
 
+Selected options:
 
+| Option | Description |
+|---|---|
+| `--vcf` | Input VCF or VCF.GZ file. |
+| `--tsv` | Input tab-delimited variant file. |
+| `--db` | dORFannotator SQLite reference database. |
+| `--out` | Output TSV file. |
+| `--chr` | Restrict annotation to one or more chromosomes. |
+| `--region` | Restrict annotation to a genomic interval, for example `chr1:1000000-2000000`. |
+| `--threads` | Number of CPU threads. |
+| `--batch-size` | Number of variants processed per batch. |
+| `--mane-only` | Report annotations only for MANE transcripts. |
+| `--include-predicted` | Include all sequence-predicted ORF consequences. |
+| `--evidence-only` | Report only consequences affecting translated-evidence ORFs. |
 
-## Output Format
+By default, `annotate` uses an evidence-first output mode: all consequences affecting translated-evidence ORFs are reported, while sequence-predicted ORFs are limited to strong-Kozak `dStart_gained`, strong-Kozak `dStop_gained`, and `dKozak_changed` events whose alternate Kozak strength is strong. Use `--include-predicted` to report all sequence-predicted ORF consequences.
 
-The output is a tab-separated value (TSV) file named `<output_prefix>_dORFannotator.tsv` with the following columns:
-
-- `chromosome`: Chromosome name
-- `genomic_pos`: Genomic position (1-based)
-- `ref`: Reference allele
-- `alt`: Alternate allele
-- `Symbol`: Gene symbol
-- `transcript`: Transcript ID
-- `strand`: Strand orientation (+ or -)
-- `existing_dORF_count`: Number of known dORFs in the transcript's 3'UTR
-- `affected_dORF_id`: ID of the affected dORF (if applicable)
-- `variant_type`: One of the 8 variant classification types (see below)
-- `dORF_type`: `predicted` (newly created) or `existing` (affects known dORF)
-- `dORF_genomic_start`: Genomic start position (1-based)
-- `dORF_genomic_end`: Genomic end position (1-based)
-- `dORF_cdna_start`: cDNA start position (relative to transcript)
-- `dORF_cdna_end`: cDNA end position (relative to transcript)
-- `dORF_length`: dORF length in base pairs
-- `distance_to_CDS_stop`: Distance from CDS stop codon to dORF start (bp)
-- `overlap_CDS`: Whether dORF overlaps with CDS (`TRUE`/`FALSE`)
-- `dORF_start_codon`: Start codon sequence (e.g., ATG)
-- `dORF_stop_codon`: Stop codon sequence (e.g., TAA)
-- `dORF_sequence`: Complete dORF nucleotide sequence
-- `dORF_AA`: Translated amino acid sequence
-- `dORF_GC_percent`: GC content percentage
-- `kozak_sequence`: Kozak context sequence
-- `kozak_strength`: Kozak strength classification (`Strong`, `Moderate`, `Weak`)
-- `aa_change`: Amino acid change (for missense variants)
-- `alt_stop_exists`: Whether alternative stop codon exists after variant
-- `alt_stop_distance`: Distance to alternative stop (if exists)
-- `indel_type`: Type of indel effect (`frameshift` or `inframe`)
-
+---
 
 ## Examples
-The directory **examples/** contains some small example files that are useful when getting started. A test run on a set of binary traits can be achieved by the following 2 commands.
+
+### ClinVar example test
+
+This repository includes a ClinVar-derived input file and the expected dORFannotator output:
+
+```text
+tests/clinvar_mane_3utr.filtered.tsv.gz
+tests/clinvar.dORFannotator.tsv
+```
+
+### Use the precomputed database
+
+Download `gencode.v45.db.zip` from the Zenodo record (https://doi.org/10.5281/zenodo.21148673) and extract it:
 
 ```bash
-cd examples
-## samtools faidx test_reference.fa
-## bgzip -c test_variants.vcf > test_variants.vcf.gz
-## tabix -p vcf test_variants.vcf.gz
-
-python ../dORFannotator.py \
-    --genome test_reference.fa \
-    --vcf test_variants.vcf.gz \
-    --dorf test_known_dORF.bed \
-    --annotation test_annotation.gtf \
-    --out test_output
+mkdir -p db
+unzip gencode.v45.db.zip -d db
 ```
-The output result from this command is included in example/test_output_dORFannotator.tsv.
 
+Run the example annotation:
 
-
-## Citation
-
-If you use dORFannotator in your research, please cite:
-
+```bash
+dORFannotator annotate \
+  --tsv tests/clinvar_mane_3utr.filtered.tsv.gz \
+  --db db/gencode.v45.db \
+  --out tests/test.tsv \
+  --include-predicted
 ```
-XXXXXX
+
+## Input and output formats
+
+### Variant input
+
+TSV input must contain the following columns:
+
+```text
+chrom  pos  ref  alt
 ```
+
+Header names are case-insensitive. `#CHROM`, `POS`, `REF`, and `ALT` are also accepted. If no recognized header is present, the first four columns are interpreted as `chrom`, `pos`, `ref`, and `alt`. Comma-separated ALT alleles are expanded.
+
+VCF and VCF.GZ files are supported with `--vcf`.
+
+### Translated dORF evidence input
+
+The translated dORF evidence file used by `build` must contain six tab-delimited columns:
+
+```text
+chrom  start  end  strand  transcript_id  orf_class
+```
+
+Coordinates are 1-based genomic positions. `orf_class` must be `dORF` or `doORF`. Extra columns after `orf_class` are ignored.
+
+### Annotation output
+
+The standalone annotator writes a compact TSV with fixed columns:
+
+```text
+chrom
+pos
+ref
+alt
+gene
+transcript
+mane
+strand
+orf_class
+csq
+evidence
+dorf_count
+dorf_start
+dorf_end
+dist_cds
+detail
+```
+
+Column descriptions:
+
+| Column | Description |
+|---|---|
+| `chrom`, `pos`, `ref`, `alt` | Input variant allele. |
+| `gene` | Gene symbol associated with the annotated transcript. |
+| `transcript` | Transcript identifier. |
+| `mane` | Whether the transcript is a MANE transcript. |
+| `strand` | Transcript strand. |
+| `orf_class` | `dORF` or `doORF`. |
+| `csq` | dORFannotator consequence term. |
+| `evidence` | `true` if the affected reference ORF matches translated dORF evidence; otherwise `false`. |
+| `dorf_count` | Number of interpreted dORFs for the annotated transcript. |
+| `dorf_start`, `dorf_end` | 1-based genomic coordinates of the interpreted ORF. |
+| `dist_cds` | Transcript-oriented distance from the annotated CDS stop to the interpreted ORF start. |
+| `detail` | Consequence-specific semicolon-separated `key=value` fields. |
+
+The `evidence` field indicates support for the reference ORF only. It does not assert experimental support for a variant-created ORF.
+
+### Consequence terms
+
+dORFannotator reports the following primary consequence terms:
+
+| Consequence | Description |
+|---|---|
+| `dStart_lost` | Variant disrupts a dORF/doORF initiation codon. |
+| `dStart_changed` | Variant changes one initiation codon to another accepted initiation codon. |
+| `dStart_gained` | Variant creates a new accepted initiation codon and a candidate dORF/doORF. |
+| `dStop_lost` | Variant disrupts a dORF/doORF termination codon. |
+| `dStop_changed` | Variant changes one stop codon to another stop codon. |
+| `dStop_gained` | Variant creates a premature stop codon in a dORF/doORF. |
+| `dFrameshift` | Indel changes the reading frame of a dORF/doORF. |
+| `dInframe` | Indel changes a dORF/doORF sequence without changing frame. |
+| `dMissense` | SNV changes the encoded amino acid in a dORF/doORF. |
+| `dSynonymous` | SNV does not change the encoded amino acid in a dORF/doORF. |
+| `dKozak_changed` | Variant changes Kozak-context strength around a dORF/doORF initiation codon. |
+
+Kozak strength uses the canonical −3 A/G and +4 G rule:
+
+| Strength | Definition |
+|---|---|
+| `strong` | Both positions match. |
+| `moderate` | One position matches. |
+| `weak` | Neither position matches. |
+
+---
+
+## Contributing
+
+Contributions are welcome. Please submit pull requests or open issues on the GitHub repository.
+
+---
+
+## License
+
+This project is licensed under the GNU General Public License v3.0. See `LICENSE`.
+
+---
 
 ## Contact
 
@@ -176,7 +266,3 @@ XXXXXX
 - **Institution**: Institute of Rare Diseases, West China Hospital, Sichuan University
 - **Email**: liusihan@wchscu.cn
 - **Issues**: Please report bugs and feature requests on GitHub
-
-## License
-
-This project is licensed under the GNU General Public License v3.0.
