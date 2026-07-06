@@ -1083,7 +1083,7 @@ class EffectTsvWriter:
         self.path = path
         self.handle = open(path, "wt", encoding="utf-8", newline="")
         self.fieldnames = OUTPUT_FIELDS
-        self.writer = csv.DictWriter(self.handle, fieldnames=self.fieldnames, delimiter="\t")
+        self.writer = csv.DictWriter(self.handle, fieldnames=self.fieldnames, delimiter="\t", lineterminator="\n")
         self.writer.writeheader()
 
     def write_many(self, effects: Iterable[Effect]) -> None:
