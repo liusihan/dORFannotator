@@ -30,7 +30,7 @@ Reference data and precomputed annotation-ready resources associated with the dO
 
 ### Prerequisites
 
-- Python 3.10 or newer
+- Python 3.13 or newer
 - `pip`
 
 ### Install from source
@@ -129,7 +129,8 @@ dORFannotator annotate \
   --tsv tests/clinvar_mane_3utr.filtered.tsv.gz \
   --db db/gencode.v45.db \
   --out tests/test.tsv \
-  --include-predicted
+  --include-predicted \
+  --mane-only
 ```
 ---
 
