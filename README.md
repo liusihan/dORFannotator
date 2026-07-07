@@ -129,7 +129,7 @@ dORFannotator annotate \
   --tsv tests/test.tsv \
   --db db/gencode.v45.db \
   --chr 1 \
-  --out tests/test.output.tsv \
+  --out tests/test.output.tsv
 ```
 ---
 
