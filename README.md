@@ -1,6 +1,6 @@
-﻿# dORFannotator: functional annotation of variants affecting downstream open reading frames in 3′UTRs
+﻿# dORFannotator: functional annotation of variants affecting downstream open reading frames in 3′UTR
 
-dORFannotator is a freely available tool for annotating SNVs, MNVs, and short indels that create or alter downstream open reading frames (dORFs) and downstream overlapping open reading frames (doORFs) in 3′ untranslated regions (3′UTRs). 
+dORFannotator is a freely available tool for annotating SNVs, MNVs, and short indels that create or alter downstream open reading frames (dORFs) and downstream overlapping open reading frames (doORFs) in 3′ untranslated regions (3′UTR). 
 
 Reference data and precomputed annotation-ready resources associated with the dORFannotator study are available from Zenodo: <https://doi.org/10.5281/zenodo.21148673>.
 
