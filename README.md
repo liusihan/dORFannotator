@@ -126,11 +126,10 @@ Run the example annotation:
 
 ```bash
 dORFannotator annotate \
-  --tsv tests/clinvar_mane_3utr.filtered.tsv.gz \
+  --tsv tests/test.tsv \
   --db db/gencode.v45.db \
-  --out tests/test.tsv \
-  --include-predicted \
-  --mane-only
+  --chr 1 \
+  --out tests/test.output.tsv \
 ```
 ---
 
